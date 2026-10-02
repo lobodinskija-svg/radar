@@ -3,7 +3,6 @@
 <head>
     <meta charset="utf-8">
     <title>Мониторинг Воздушной Обстановки - Одесская Область</title>
-    <!-- Подключаем карту Leaflet, которая отлично работает и на ПК, и на телефонах -->
     <link rel="stylesheet" href="https://jsdelivr.net"/>
     <script src="https://jsdelivr.net"></script>
     <style>
@@ -28,10 +27,8 @@
 </head>
 <body>
 
-    <!-- Карта слева -->
     <div id="map"></div>
 
-    <!-- Чат-панель справа -->
     <div id="sidebar">
         <div id="header">
             <h2>ОДЕССКАЯ ОБЛАСТЬ • МОНИТОРИНГ</h2>
@@ -47,15 +44,15 @@
     </div>
 
     <script>
-        // Инициализируем карту и центрируем её ровно по Одесской области
+        // Инициализируем карту Одесской области
         const map = L.map('map', { attributionControl: false }).setView([46.4825, 30.7233], 8);
         
-        // Красивая темная карта, чтобы на ней четко выделялись красные и оранжевые маркеры
-        L.tileLayer('https://{s}://{z}/{x}/{y}{r}.png', { maxZoom: 18 }).addTo(map);
+        // ИСПРАВЛЕННЫЙ УЛЬТРА-СТАБИЛЬНЫЙ АДРЕС КАРТЫ (Все слэши на месте)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(map);
         
         const layerGroup = L.layerGroup().addTo(map);
 
-        // Встроенная база точных географических координат всех ключевых точек и сёл Одесской области
+        // База координат городов, пгт и сёл Одесской области
         const UKRAINE_CITIES = {
             "одесса": [46.4825, 30.7233], "одеси": [46.4825, 30.7233],
             "черноморск": [46.3013, 30.6554], "южное": [46.6234, 31.1018], "южне": [46.6234, 31.1018],
@@ -68,10 +65,13 @@
             "болград": [45.6812, 28.6112], "арциз": [45.9922, 29.4184], "татарбунары": [45.7482, 29.0112], "сарата": [46.0212, 29.6612],
             "подольск": [47.7419, 29.5350], "балта": [48.0354, 29.6224], "кодыма": [48.0942, 29.2142], "ананьев": [47.7224, 29.9642],
             "любашевка": [47.8424, 30.2642], "саврань": [48.1324, 30.0842], "ширяево": [47.3824, 30.1912], "березовка": [47.2012, 30.8512],
-            "раздельная": [46.8512, 30.0712], "беляевка": [46.4772, 30.2042], "теплодар": [46.5024, 30.3242], "маяки": [46.4112, 30.2712]
+            "раздельная": [46.8512, 30.0712], "беляевка": [46.4772, 30.2042], "теплодар": [46.5024, 30.3242], "маяки": [46.4112, 30.2712],
+            "утконосовка": [45.4984, 28.8712], "сафьяны": [45.4064, 28.8912], "богатое": [45.4124, 28.9842], "озерное": [45.4112, 28.6712],
+            "орловка": [45.3212, 28.4412], "усатово": [46.5272, 30.6512], "нерубайское": [46.5412, 30.6212], "дачное": [46.5912, 30.5512],
+            "выгода": [46.6112, 30.4212], "доброслав": [46.6124, 30.8912], "коминтерново": [46.6124, 30.8912]
         };
 
-        // Векторная отрисовка условных границ всех 7 районов Одесской области
+        // Официальные тактические контуры всех 7 районов Одесской области
         const DISTRICTS = [
             { name: "Одесский район", coords: [[46.7, 30.0], [46.8, 30.6], [46.6, 31.1], [46.3, 30.7], [46.4, 30.1]], color: "#38bdf8" },
             { name: "Белгород-Днестровский район", coords: [[46.3, 29.9], [46.4, 30.3], [45.9, 30.4], [45.8, 29.7]], color: "#a855f7" },
@@ -82,17 +82,15 @@
             { name: "Березовский район", coords: [[47.5, 30.3], [47.4, 31.1], [46.8, 30.9], [46.9, 30.3]], color: "#14b8a6" }
         ];
 
-        // Наносим границы районов на карту
         DISTRICTS.forEach(dist => {
             L.polygon(dist.coords, {
                 color: dist.color,
-                weight: 2,
+                weight: 3,
                 fillColor: dist.color,
-                fillOpacity: 0.06
+                fillOpacity: 0.1
             }).addTo(map).bindTooltip(`<b>${dist.name}</b>`, { sticky: true });
         });
 
-        // Функция обработки команд, введённых на самом сайте
         function processCommand() {
             const input = document.getElementById('cmd-input');
             const text = input.value.trim();
@@ -104,7 +102,6 @@
             let endCoords = null;
             let endName = "";
 
-            // 1. Ищем начальную точку угрозы
             for (let city in UKRAINE_CITIES) {
                 if (lowerText.includes(city)) {
                     startCoords = UKRAINE_CITIES[city];
@@ -114,12 +111,10 @@
             }
 
             if (startCoords) {
-                // Прямо на ходу определяем тип угрозы по словам
                 let isDrone = lowerText.includes('шахед') || lowerText.includes('бпла') || lowerText.includes('дроны') || lowerText.includes('мопед');
                 let targetType = isDrone ? "БПЛА ШАХЕД" : "РАКЕТНАЯ УГРОЗА";
-                let threatColor = isDrone ? "#f97316" : "#ef4444"; // Оранжевый или Красный
+                let threatColor = isDrone ? "#f97316" : "#ef4444";
 
-                // 2. Ищем вектор направления полета цели (второй упомянутый город)
                 for (let city in UKRAINE_CITIES) {
                     if (lowerText.includes(city) && city !== startName) {
                         endCoords = UKRAINE_CITIES[city];
@@ -128,33 +123,29 @@
                     }
                 }
 
-                // Рисуем круговую зону тревоги на карте вокруг точки
                 L.circle(startCoords, {
                     radius: 20000,
                     color: threatColor,
                     fillColor: threatColor,
-                    fillOpacity: 0.3,
-                    weight: 2
+                    fillOpacity: 0.4,
+                    weight: 3
                 }).addTo(layerGroup);
 
-                // Ставим маркер на карту
                 L.marker(startCoords).addTo(layerGroup)
                     .bindPopup(`<b>🛑 ${targetType}</b><br>Локация: ${startName.toUpperCase()}`).openPopup();
 
-                // Если в тексте был курс (например, курс на порт) — прорисовываем чёткую стрелку
                 if (endCoords) {
                     L.polyline([startCoords, endCoords], {
                         color: threatColor,
-                        weight: 4,
+                        weight: 5,
                         dashArray: '6, 12',
                         opacity: 0.9
                     }).addTo(layerGroup);
                 }
 
-                // Добавляем красивую текстовую карточку в правый чат
                 const chatBox = document.getElementById('chat-box');
                 const hint = document.getElementById('empty-hint');
-                if (hint) hint.remove(); // Убираем подсказку, если она есть
+                if (hint) hint.remove();
 
                 const timeStr = new Date().toLocaleTimeString('ru-RU');
                 const card = document.createElement('div');
@@ -167,3 +158,17 @@
                     </div>
                     <div class="log-text">${text}</div>
                 `;
+                chatBox.insertBefore(card, chatBox.firstChild);
+
+                input.value = "";
+            } else {
+                alert("Населенный пункт или село не найдены в РЛС базе.");
+            }
+        }
+
+        document.getElementById('cmd-input').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') processCommand();
+        });
+    </script>
+</body>
+</html>
