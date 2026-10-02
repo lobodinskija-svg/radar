@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <title>Мониторинг Воздушной Обстановки - Одесская Область</title>
+    <!-- Подключаем карту Leaflet, которая отлично работает и на ПК, и на телефонах -->
+    <link rel="stylesheet" href="https://jsdelivr.net"/>
+    <script src="https://jsdelivr.net"></script>
+    <style>
+        body { margin: 0; padding: 0; display: flex; height: 100vh; background: #0b0f19; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+        #map { width: 75%; height: 100%; background: #0d111a; }
+        #sidebar { width: 25%; height: 100%; background: #111622; border-left: 2px solid #1f2937; display: flex; flex-direction: column; box-shadow: -5px 0 25px rgba(0,0,0,0.5); z-index: 1000; }
+        #header { background: #1e293b; padding: 15px; text-align: center; border-bottom: 1px solid #334155; }
+        #header h2 { margin: 0; color: #38bdf8; font-size: 16px; letter-spacing: 0.5px; }
+        #header p { margin: 4px 0 0 0; color: #94a3b8; font-size: 11px; }
+        #chat-box { flex-grow: 1; padding: 15px; overflow-y: auto; box-sizing: border-box; display: flex; flex-direction: column; gap: 10px; }
+        .log-card { background: #1e293b; border-radius: 6px; padding: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); border-left: 4px solid #38bdf8; animation: fadeIn 0.3s ease; }
+        .log-meta { display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; margin-bottom: 5px; font-weight: bold; }
+        .log-text { color: #f8fafc; font-size: 13px; line-height: 1.4; word-break: break-word; }
+        #input-panel { padding: 15px; background: #0f172a; border-top: 1px solid #1e293b; display: flex; gap: 8px; }
+        #cmd-input { flex-grow: 1; background: #1e293b; border: 1px solid #334155; color: #f8fafc; padding: 12px; font-size: 13px; border-radius: 6px; outline: none; }
+        #cmd-input:focus { border-color: #38bdf8; }
+        #send-btn { background: #0284c7; border: none; color: white; padding: 0 20px; font-weight: bold; font-size: 13px; cursor: pointer; border-radius: 6px; transition: 0.2s; }
+        #send-btn:hover { background: #0369a1; }
+        .empty-hint { color: #475569; text-align: center; margin-top: 40px; font-size: 13px; font-style: italic; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+    <!-- Карта слева -->
+    <div id="map"></div>
+
+    <!-- Чат-панель справа -->
+    <div id="sidebar">
+        <div id="header">
+            <h2>ОДЕССКАЯ ОБЛАСТЬ • МОНИТОРИНГ</h2>
+            <p>ИНТЕРАКТИВНАЯ КАРТА ВЕКТОРОВ И ТРЕВОГ</p>
+        </div>
+        <div id="chat-box">
+            <div class="empty-hint" id="empty-hint">Ожидание оперативного ввода данных...</div>
+        </div>
+        <div id="input-panel">
+            <input type="text" id="cmd-input" placeholder="Одесса шахед курс на порт..." autocomplete="off">
+            <button id="send-btn" onclick="processCommand()">ВВОД</button>
+        </div>
+    </div>
+
+    <script>
+        // Инициализируем карту и центрируем её ровно по Одесской области
+        const map = L.map('map', { attributionControl: false }).setView([46.4825, 30.7233], 8);
+        
+        // Красивая темная карта, чтобы на ней четко выделялись красные и оранжевые маркеры
+        L.tileLayer('https://{s}://{z}/{x}/{y}{r}.png', { maxZoom: 18 }).addTo(map);
+        
+        const layerGroup = L.layerGroup().addTo(map);
+
+        // Встроенная база точных географических координат всех ключевых точек и сёл Одесской области
+        const UKRAINE_CITIES = {
+            "одесса": [46.4825, 30.7233], "одеси": [46.4825, 30.7233],
+            "черноморск": [46.3013, 30.6554], "южное": [46.6234, 31.1018], "южне": [46.6234, 31.1018],
+            "николаев": [46.9750, 31.9946], "киев": [50.4501, 30.5234],
+            "центр": [46.4840, 30.7326], "порт": [46.4910, 30.7450], "поскот": [46.5750, 30.7950], "котовского": [46.5750, 30.7950],
+            "таирова": [46.4013, 30.7061], "черемушки": [46.4398, 30.7032], "фонтан": [46.4322, 30.7512], "аркадия": [46.4312, 30.7610],
+            "затока": [46.0645, 30.4534], "каролино": [46.1511, 30.4784], "бугаз": [46.0645, 30.4534], "грибовка": [46.1912, 30.5724],
+            "санжейка": [46.2264, 30.6033], "сергеевка": [46.0272, 30.3478], "белгород": [46.1931, 30.3512], "аккерман": [46.1931, 30.3512],
+            "измаил": [45.3508, 28.8396], "рени": [45.4542, 28.2912], "килия": [45.4564, 29.2642], "вилково": [45.4012, 29.5854],
+            "болград": [45.6812, 28.6112], "арциз": [45.9922, 29.4184], "татарбунары": [45.7482, 29.0112], "сарата": [46.0212, 29.6612],
+            "подольск": [47.7419, 29.5350], "балта": [48.0354, 29.6224], "кодыма": [48.0942, 29.2142], "ананьев": [47.7224, 29.9642],
+            "любашевка": [47.8424, 30.2642], "саврань": [48.1324, 30.0842], "ширяево": [47.3824, 30.1912], "березовка": [47.2012, 30.8512],
+            "раздельная": [46.8512, 30.0712], "беляевка": [46.4772, 30.2042], "теплодар": [46.5024, 30.3242], "маяки": [46.4112, 30.2712]
+        };
+
+        // Векторная отрисовка условных границ всех 7 районов Одесской области
+        const DISTRICTS = [
+            { name: "Одесский район", coords: [[46.7, 30.0], [46.8, 30.6], [46.6, 31.1], [46.3, 30.7], [46.4, 30.1]], color: "#38bdf8" },
+            { name: "Белгород-Днестровский район", coords: [[46.3, 29.9], [46.4, 30.3], [45.9, 30.4], [45.8, 29.7]], color: "#a855f7" },
+            { name: "Измаильский район", coords: [[45.6, 28.5], [45.7, 29.6], [45.3, 29.6], [45.3, 28.7]], color: "#ec4899" },
+            { name: "Подольский район", coords: [[48.2, 29.0], [48.0, 30.3], [47.5, 30.2], [47.6, 29.4]], color: "#eab308" },
+            { name: "Болградский район", coords: [[46.1, 28.4], [46.2, 29.3], [45.6, 29.1], [45.7, 28.3]], color: "#10b981" },
+            { name: "Раздельнянский район", coords: [[47.2, 29.6], [47.1, 30.3], [46.6, 30.3], [46.7, 29.8]], color: "#f97316" },
+            { name: "Березовский район", coords: [[47.5, 30.3], [47.4, 31.1], [46.8, 30.9], [46.9, 30.3]], color: "#14b8a6" }
+        ];
+
+        // Наносим границы районов на карту
+        DISTRICTS.forEach(dist => {
+            L.polygon(dist.coords, {
+                color: dist.color,
+                weight: 2,
+                fillColor: dist.color,
+                fillOpacity: 0.06
+            }).addTo(map).bindTooltip(`<b>${dist.name}</b>`, { sticky: true });
+        });
+
+        // Функция обработки команд, введённых на самом сайте
+        function processCommand() {
+            const input = document.getElementById('cmd-input');
+            const text = input.value.trim();
+            if (!text) return;
+
+            const lowerText = text.toLowerCase();
+            let startCoords = null;
+            let startName = "";
+            let endCoords = null;
+            let endName = "";
+
+            // 1. Ищем начальную точку угрозы
+            for (let city in UKRAINE_CITIES) {
+                if (lowerText.includes(city)) {
+                    startCoords = UKRAINE_CITIES[city];
+                    startName = city;
+                    break;
+                }
+            }
+
+            if (startCoords) {
+                // Прямо на ходу определяем тип угрозы по словам
+                let isDrone = lowerText.includes('шахед') || lowerText.includes('бпла') || lowerText.includes('дроны') || lowerText.includes('мопед');
+                let targetType = isDrone ? "БПЛА ШАХЕД" : "РАКЕТНАЯ УГРОЗА";
+                let threatColor = isDrone ? "#f97316" : "#ef4444"; // Оранжевый или Красный
+
+                // 2. Ищем вектор направления полета цели (второй упомянутый город)
+                for (let city in UKRAINE_CITIES) {
+                    if (lowerText.includes(city) && city !== startName) {
+                        endCoords = UKRAINE_CITIES[city];
+                        endName = city;
+                        break;
+                    }
+                }
+
+                // Рисуем круговую зону тревоги на карте вокруг точки
+                L.circle(startCoords, {
+                    radius: 20000,
+                    color: threatColor,
+                    fillColor: threatColor,
+                    fillOpacity: 0.3,
+                    weight: 2
+                }).addTo(layerGroup);
+
+                // Ставим маркер на карту
+                L.marker(startCoords).addTo(layerGroup)
+                    .bindPopup(`<b>🛑 ${targetType}</b><br>Локация: ${startName.toUpperCase()}`).openPopup();
+
+                // Если в тексте был курс (например, курс на порт) — прорисовываем чёткую стрелку
+                if (endCoords) {
+                    L.polyline([startCoords, endCoords], {
+                        color: threatColor,
+                        weight: 4,
+                        dashArray: '6, 12',
+                        opacity: 0.9
+                    }).addTo(layerGroup);
+                }
+
+                // Добавляем красивую текстовую карточку в правый чат
+                const chatBox = document.getElementById('chat-box');
+                const hint = document.getElementById('empty-hint');
+                if (hint) hint.remove(); // Убираем подсказку, если она есть
+
+                const timeStr = new Date().toLocaleTimeString('ru-RU');
+                const card = document.createElement('div');
+                card.className = 'log-card';
+                card.style.borderLeftColor = threatColor;
+                card.innerHTML = `
+                    <div class="log-meta">
+                        <span>⏱ ${timeStr}</span>
+                        <span style="color: ${threatColor}">${targetType}</span>
+                    </div>
+                    <div class="log-text">${text}</div>
+                `;
